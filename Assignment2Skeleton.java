@@ -148,7 +148,19 @@ class Assign2Skeleton {
 		// To Do: 
 		// Execute the second query, which will return stock information of the ticker (descending on the transaction date)
 		// Please don't forget to use a prepared statement	
+		// To Do: 
+		// Loop through all the dates of that company (descending order)
+		// Find a split if there is any (2:1, 3:1, 3:2) and adjust the split accordingly
+		// Include the adjusted data to the result (which is a Deque); You can use addFirst method for that purpose
+		
+		//INTC 1997.07.08 1997.07.17
+		//INTC 1980.01.01 1999.12.31
 		Deque<StockData> result = new ArrayDeque<>();
+		StockData nextDay = null;
+		StockData currDay = null;
+		int numOfSplits = 0;
+		double divisor = 1;
+		boolean splitToday = false;
 		
 		if (start == null || end == null) { // no range of dates? show all data
 			PreparedStatement pstmt = conn.prepareStatement(
@@ -160,15 +172,8 @@ class Assign2Skeleton {
 			pstmt.setString(1, ticker);
 			ResultSet rs = pstmt.executeQuery();
 
-			double closingPrice = 0;
-			double openingPrice = 0;
-			StockData currDay = null;
-			StockData prevDay = null;
-			int numOfSplits = 0;
-			double divisor = 1;
-
 			if (rs.next()) {
-				prevDay = new StockData(
+				currDay = new StockData(
 						rs.getString(1).trim(),
 						Double.parseDouble(rs.getString(2).trim()),
 						Double.parseDouble(rs.getString(3).trim()),
@@ -180,7 +185,7 @@ class Assign2Skeleton {
 			}
 
 			while (rs.next()) {
-				currDay = new StockData(
+				nextDay = new StockData(
 						rs.getString(1).trim(),
 						Double.parseDouble(rs.getString(2).trim()),
 						Double.parseDouble(rs.getString(3).trim()),
@@ -190,17 +195,33 @@ class Assign2Skeleton {
 						Double.parseDouble(rs.getString(7).trim())
 				);
 
-				double split = check_lines_for_split(prevDay, currDay);
+				double split = check_lines_for_split(currDay, nextDay);
 				divisor = divisor * split;
 				if (split != 1) { // stock split occured
 					numOfSplits++;
+					splitToday = true;
 				}
 
-				result.addFirst(prevDay);
-				prevDay = currDay;
+				if (!splitToday) {
+					currDay.setOpenPrice(currDay.getOpenPrice() / divisor);
+					currDay.setClosePrice(currDay.getClosePrice() / divisor);
+					currDay.setHighPrice(currDay.getHighPrice() / divisor);
+					currDay.setLowPrice(currDay.getLowPrice() / divisor);
+				}
 
+				result.addFirst(currDay);
+				currDay = nextDay;
+				splitToday = false;
 			}
-			result.addFirst(prevDay);
+
+			if (!splitToday) {
+				currDay.setOpenPrice(currDay.getOpenPrice() / divisor);
+				currDay.setClosePrice(currDay.getClosePrice() / divisor);
+				currDay.setHighPrice(currDay.getHighPrice() / divisor);
+				currDay.setLowPrice(currDay.getLowPrice() / divisor);
+			}
+			result.addFirst(currDay);
+
 			System.out.println(numOfSplits + ", divisor: " + divisor);
 			pstmt.close();
 		} else {
@@ -217,23 +238,16 @@ class Assign2Skeleton {
 			pstmt.setString(3, end);
 			ResultSet rs = pstmt.executeQuery();
 
-			//INTC 1997.07.05 1997.07.17
-			StockData currDay = null;
-			StockData prevDay = null;
-			int numOfSplits = 0;
-			double divisor = 1;
-			boolean splitToday = false;
-
 			if (rs.next()) {
-				System.out.println("D: " + rs.getString(1).trim() +
-						", O: " + Double.parseDouble(rs.getString(2).trim()) +
-						", H: " + Double.parseDouble(rs.getString(3).trim()) +
-						", L: " + Double.parseDouble(rs.getString(4).trim()) +
-						", C: " + Double.parseDouble(rs.getString(5).trim()) +
-						", V: " + Double.parseDouble(rs.getString(6).trim()) +
-						", AC: " + Double.parseDouble(rs.getString(7).trim())
-				);
-				prevDay = new StockData(
+				// System.out.println("D: " + rs.getString(1).trim() +
+				// 		", O: " + Double.parseDouble(rs.getString(2).trim()) +
+				// 		", H: " + Double.parseDouble(rs.getString(3).trim()) +
+				// 		", L: " + Double.parseDouble(rs.getString(4).trim()) +
+				// 		", C: " + Double.parseDouble(rs.getString(5).trim()) +
+				// 		", V: " + Double.parseDouble(rs.getString(6).trim()) +
+				// 		", AC: " + Double.parseDouble(rs.getString(7).trim())
+				// );
+				currDay = new StockData(
 						rs.getString(1).trim(),
 						Double.parseDouble(rs.getString(2).trim()),
 						Double.parseDouble(rs.getString(3).trim()),
@@ -253,8 +267,7 @@ class Assign2Skeleton {
 				// 		", V: " + Double.parseDouble(rs.getString(6).trim()) +
 				// 		", AC: " + Double.parseDouble(rs.getString(7).trim())
 				// );
-
-				currDay = new StockData(
+				nextDay = new StockData(
 						rs.getString(1).trim(),
 						Double.parseDouble(rs.getString(2).trim()),
 						Double.parseDouble(rs.getString(3).trim()),
@@ -264,7 +277,7 @@ class Assign2Skeleton {
 						Double.parseDouble(rs.getString(7).trim())
 				);
 
-				double split = check_lines_for_split(prevDay, currDay);
+				double split = check_lines_for_split(currDay, nextDay);
 				divisor = divisor * split;
 				if (split != 1) { // stock split occured
 					numOfSplits++;
@@ -272,34 +285,29 @@ class Assign2Skeleton {
 				}
 				
 				if (!splitToday) {
-					prevDay.setOpenPrice(Math.round((prevDay.getOpenPrice() / divisor) * 100.0) / 100.0);
-					prevDay.setClosePrice(Math.round((prevDay.getClosePrice() / divisor) * 100.0) / 100.0);
-					prevDay.setHighPrice(Math.round((prevDay.getHighPrice() / divisor) * 100.0) / 100.0);
-					prevDay.setLowPrice(Math.round((prevDay.getLowPrice() / divisor) * 100.0) / 100.0);
+					currDay.setOpenPrice(currDay.getOpenPrice() / divisor);
+					currDay.setClosePrice(currDay.getClosePrice() / divisor);
+					currDay.setHighPrice(currDay.getHighPrice() / divisor);
+					currDay.setLowPrice(currDay.getLowPrice() / divisor);
 				}
 
-				result.addFirst(prevDay);
+				result.addFirst(currDay);
 				//System.out.println(result.getFirst() + "\n");
-				prevDay = currDay;
+				currDay = nextDay;
 				splitToday = false;
 			}
 
 			if (!splitToday) {
-				prevDay.setOpenPrice(Math.round((prevDay.getOpenPrice() / divisor) * 100.0) / 100.0);
-				prevDay.setClosePrice(Math.round((prevDay.getClosePrice() / divisor) * 100.0) / 100.0);
-				prevDay.setHighPrice(Math.round((prevDay.getHighPrice() / divisor) * 100.0) / 100.0);
-				prevDay.setLowPrice(Math.round((prevDay.getLowPrice() / divisor) * 100.0) / 100.0);
+				currDay.setOpenPrice(currDay.getOpenPrice() / divisor);
+				currDay.setClosePrice(currDay.getClosePrice() / divisor);
+				currDay.setHighPrice(currDay.getHighPrice() / divisor);
+				currDay.setLowPrice(currDay.getLowPrice() / divisor);
 			}
-			result.addFirst(prevDay);
-			System.out.println(numOfSplits + ", divisor: " + divisor);
-			//System.out.println(result);
+			result.addFirst(currDay);
+
+			System.out.println("splits: " + numOfSplits + ", divisor: " + divisor);
 			pstmt.close();
 		}
-
-		// To Do: 
-		// Loop through all the dates of that company (descending order)
-		// Find a split if there is any (2:1, 3:1, 3:2) and adjust the split accordingly
-		// Include the adjusted data to the result (which is a Deque); You can use addFirst method for that purpose
 				
 		return result;
 	}
@@ -308,21 +316,20 @@ class Assign2Skeleton {
 		Takes the 2 observed lines of data and checks if the stock split occurred.
 		Also makes sure the two lines have the same ticker symbol.
 	*/
-	public static double check_lines_for_split (StockData prev, StockData curr) {
-		//System.out.println(prev.transDate + " closing: " + prev.closePrice + ", " + curr.transDate + " opening: " + curr.openPrice + "\n");
-		if (Math.abs(curr.closePrice / prev.openPrice - 1.5) < 0.15) {
+	public static double check_lines_for_split (StockData curr, StockData next) {
+		if (Math.abs(next.closePrice / curr.openPrice - 1.5) < 0.15) {
 			System.out.printf("3:2 split on %s: %.2f --> %.2f%n",
-				curr.transDate, curr.closePrice, prev.openPrice);
+				next.transDate, next.closePrice, curr.openPrice);
 			return 1.5;
 		}
-		if (Math.abs(curr.closePrice / prev.openPrice - 2.0) < 0.20) {
+		if (Math.abs(next.closePrice / curr.openPrice - 2.0) < 0.20) {
 			System.out.printf("2:1 split on %s: %.2f --> %.2f%n",
-				curr.transDate, curr.closePrice, prev.openPrice);
+				next.transDate, next.closePrice, curr.openPrice);
 			return 2;
 		}
-		if (Math.abs(curr.closePrice / prev.openPrice - 3.0) < 0.30) {
+		if (Math.abs(next.closePrice / curr.openPrice - 3.0) < 0.30) {
 			System.out.printf("3:1 split on %s: %.2f --> %.2f%n",
-				curr.transDate, curr.closePrice, prev.openPrice);
+				next.transDate, next.closePrice, curr.openPrice);
 			return 3;
 		}
 		return 1;
