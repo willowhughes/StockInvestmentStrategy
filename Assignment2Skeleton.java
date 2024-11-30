@@ -100,11 +100,10 @@ class Assign2Skeleton {
 					if (params.length >= 3) {
 						startdate = params[1];
 						enddate = params[2];
-					}               
+					}
 					Deque<StockData> data = getStockData(ticker, startdate, enddate);
-					//System.out.println(data);
-					System.out.println(data.getFirst().toString());
-					System.out.println(data.getLast().toString());
+					//System.out.println(data.getFirst().toString());
+					//System.out.println(data.getLast().toString());
 					
 					System.out.println("\nExecuting investment strategy");
 					doStrategy(ticker, data);
@@ -159,73 +158,23 @@ class Assign2Skeleton {
 		StockData nextDay = null;
 		StockData currDay = null;
 		int numOfSplits = 0;
+		int numOfDays = 1;
 		double divisor = 1;
 		boolean splitToday = false;
+		PreparedStatement pstmt = null;
+		ResultSet rs = null;
 		
 		if (start == null || end == null) { // no range of dates? show all data
-			PreparedStatement pstmt = conn.prepareStatement(
+			pstmt = conn.prepareStatement(
 					"select TransDate, OpenPrice, HighPrice, LowPrice, ClosePrice, Volume, AdjustedClose " +
 					"  from pricevolume " +
 					"  where Ticker = ?" +
 					" order by TransDate DESC"
 			);
 			pstmt.setString(1, ticker);
-			ResultSet rs = pstmt.executeQuery();
-
-			if (rs.next()) {
-				currDay = new StockData(
-						rs.getString(1).trim(),
-						Double.parseDouble(rs.getString(2).trim()),
-						Double.parseDouble(rs.getString(3).trim()),
-						Double.parseDouble(rs.getString(4).trim()),
-						Double.parseDouble(rs.getString(5).trim()),
-						Double.parseDouble(rs.getString(6).trim()),
-						Double.parseDouble(rs.getString(7).trim())
-				);
-			}
-
-			while (rs.next()) {
-				nextDay = new StockData(
-						rs.getString(1).trim(),
-						Double.parseDouble(rs.getString(2).trim()),
-						Double.parseDouble(rs.getString(3).trim()),
-						Double.parseDouble(rs.getString(4).trim()),
-						Double.parseDouble(rs.getString(5).trim()),
-						Double.parseDouble(rs.getString(6).trim()),
-						Double.parseDouble(rs.getString(7).trim())
-				);
-
-				double split = check_lines_for_split(currDay, nextDay);
-				divisor = divisor * split;
-				if (split != 1) { // stock split occured
-					numOfSplits++;
-					splitToday = true;
-				}
-
-				if (!splitToday) {
-					currDay.setOpenPrice(currDay.getOpenPrice() / divisor);
-					currDay.setClosePrice(currDay.getClosePrice() / divisor);
-					currDay.setHighPrice(currDay.getHighPrice() / divisor);
-					currDay.setLowPrice(currDay.getLowPrice() / divisor);
-				}
-
-				result.addFirst(currDay);
-				currDay = nextDay;
-				splitToday = false;
-			}
-
-			if (!splitToday) {
-				currDay.setOpenPrice(currDay.getOpenPrice() / divisor);
-				currDay.setClosePrice(currDay.getClosePrice() / divisor);
-				currDay.setHighPrice(currDay.getHighPrice() / divisor);
-				currDay.setLowPrice(currDay.getLowPrice() / divisor);
-			}
-			result.addFirst(currDay);
-
-			System.out.println(numOfSplits + ", divisor: " + divisor);
-			pstmt.close();
+			rs = pstmt.executeQuery();
 		} else {
-			PreparedStatement pstmt = conn.prepareStatement(
+			pstmt = conn.prepareStatement(
 					"select TransDate, OpenPrice, HighPrice, LowPrice, ClosePrice, Volume, AdjustedClose " +
 					" from pricevolume " +
 					" where Ticker = ?" +
@@ -236,87 +185,85 @@ class Assign2Skeleton {
 			pstmt.setString(1, ticker);
 			pstmt.setString(2, start);
 			pstmt.setString(3, end);
-			ResultSet rs = pstmt.executeQuery();
+			rs = pstmt.executeQuery();
+		}
 
-			if (rs.next()) {
-				// System.out.println("D: " + rs.getString(1).trim() +
-				// 		", O: " + Double.parseDouble(rs.getString(2).trim()) +
-				// 		", H: " + Double.parseDouble(rs.getString(3).trim()) +
-				// 		", L: " + Double.parseDouble(rs.getString(4).trim()) +
-				// 		", C: " + Double.parseDouble(rs.getString(5).trim()) +
-				// 		", V: " + Double.parseDouble(rs.getString(6).trim()) +
-				// 		", AC: " + Double.parseDouble(rs.getString(7).trim())
-				// );
-				currDay = new StockData(
-						rs.getString(1).trim(),
-						Double.parseDouble(rs.getString(2).trim()),
-						Double.parseDouble(rs.getString(3).trim()),
-						Double.parseDouble(rs.getString(4).trim()),
-						Double.parseDouble(rs.getString(5).trim()),
-						Double.parseDouble(rs.getString(6).trim()),
-						Double.parseDouble(rs.getString(7).trim())
-				);
+		if (rs.next()) {
+			// System.out.println("D: " + rs.getString(1).trim() +
+			// 		", O: " + Double.parseDouble(rs.getString(2).trim()) +
+			// 		", H: " + Double.parseDouble(rs.getString(3).trim()) +
+			// 		", L: " + Double.parseDouble(rs.getString(4).trim()) +
+			// 		", C: " + Double.parseDouble(rs.getString(5).trim()) +
+			// 		", V: " + Double.parseDouble(rs.getString(6).trim()) +
+			// 		", AC: " + Double.parseDouble(rs.getString(7).trim())
+			// );
+			currDay = new StockData(
+					rs.getString(1).trim(),
+					Double.parseDouble(rs.getString(2).trim()),
+					Double.parseDouble(rs.getString(3).trim()),
+					Double.parseDouble(rs.getString(4).trim()),
+					Double.parseDouble(rs.getString(5).trim()),
+					Double.parseDouble(rs.getString(6).trim()),
+					Double.parseDouble(rs.getString(7).trim())
+			);
+		}
+
+		while (rs.next()) {
+			// System.out.println("D: " + rs.getString(1).trim() +
+			// 		", O: " + Double.parseDouble(rs.getString(2).trim()) +
+			// 		", H: " + Double.parseDouble(rs.getString(3).trim()) +
+			// 		", L: " + Double.parseDouble(rs.getString(4).trim()) +
+			// 		", C: " + Double.parseDouble(rs.getString(5).trim()) +
+			// 		", V: " + Double.parseDouble(rs.getString(6).trim()) +
+			// 		", AC: " + Double.parseDouble(rs.getString(7).trim())
+			// );
+			nextDay = new StockData(
+					rs.getString(1).trim(),
+					Double.parseDouble(rs.getString(2).trim()),
+					Double.parseDouble(rs.getString(3).trim()),
+					Double.parseDouble(rs.getString(4).trim()),
+					Double.parseDouble(rs.getString(5).trim()),
+					Double.parseDouble(rs.getString(6).trim()),
+					Double.parseDouble(rs.getString(7).trim())
+			);
+
+			double split = checkLinesForSplit(currDay, nextDay);
+			divisor = divisor * split;
+			if (split != 1) { // stock split occured
+				numOfSplits++;
+				splitToday = true;
 			}
-
-			while (rs.next()) {
-				// System.out.println("D: " + rs.getString(1).trim() +
-				// 		", O: " + Double.parseDouble(rs.getString(2).trim()) +
-				// 		", H: " + Double.parseDouble(rs.getString(3).trim()) +
-				// 		", L: " + Double.parseDouble(rs.getString(4).trim()) +
-				// 		", C: " + Double.parseDouble(rs.getString(5).trim()) +
-				// 		", V: " + Double.parseDouble(rs.getString(6).trim()) +
-				// 		", AC: " + Double.parseDouble(rs.getString(7).trim())
-				// );
-				nextDay = new StockData(
-						rs.getString(1).trim(),
-						Double.parseDouble(rs.getString(2).trim()),
-						Double.parseDouble(rs.getString(3).trim()),
-						Double.parseDouble(rs.getString(4).trim()),
-						Double.parseDouble(rs.getString(5).trim()),
-						Double.parseDouble(rs.getString(6).trim()),
-						Double.parseDouble(rs.getString(7).trim())
-				);
-
-				double split = check_lines_for_split(currDay, nextDay);
-				divisor = divisor * split;
-				if (split != 1) { // stock split occured
-					numOfSplits++;
-					splitToday = true;
-				}
-				
-				if (!splitToday) {
-					currDay.setOpenPrice(currDay.getOpenPrice() / divisor);
-					currDay.setClosePrice(currDay.getClosePrice() / divisor);
-					currDay.setHighPrice(currDay.getHighPrice() / divisor);
-					currDay.setLowPrice(currDay.getLowPrice() / divisor);
-				}
-
-				result.addFirst(currDay);
-				//System.out.println(result.getFirst() + "\n");
-				currDay = nextDay;
-				splitToday = false;
-			}
-
+			
 			if (!splitToday) {
 				currDay.setOpenPrice(currDay.getOpenPrice() / divisor);
 				currDay.setClosePrice(currDay.getClosePrice() / divisor);
 				currDay.setHighPrice(currDay.getHighPrice() / divisor);
 				currDay.setLowPrice(currDay.getLowPrice() / divisor);
 			}
-			result.addFirst(currDay);
 
-			System.out.println("splits: " + numOfSplits + ", divisor: " + divisor);
-			pstmt.close();
+			result.addFirst(currDay);
+			//System.out.println(result.getFirst() + "\n");
+			currDay = nextDay; // 
+			splitToday = false;
+			numOfDays++;
 		}
-				
+
+		// add last remaining stock day
+		if (!splitToday) {
+			currDay.setOpenPrice(currDay.getOpenPrice() / divisor);
+			currDay.setClosePrice(currDay.getClosePrice() / divisor);
+			currDay.setHighPrice(currDay.getHighPrice() / divisor);
+			currDay.setLowPrice(currDay.getLowPrice() / divisor);
+		}
+		result.addFirst(currDay);
+
+		System.out.println(numOfSplits + " splits in " + numOfDays + " trading days");
+		pstmt.close();		
 		return result;
 	}
 
-	/*
-		Takes the 2 observed lines of data and checks if the stock split occurred.
-		Also makes sure the two lines have the same ticker symbol.
-	*/
-	public static double check_lines_for_split (StockData curr, StockData next) {
+	//Takes the 2 observed lines of data and checks if the stock split occurred.
+	public static double checkLinesForSplit (StockData curr, StockData next) {
 		if (Math.abs(next.closePrice / curr.openPrice - 1.5) < 0.15) {
 			System.out.printf("3:2 split on %s: %.2f --> %.2f%n",
 				next.transDate, next.closePrice, curr.openPrice);
@@ -339,6 +286,41 @@ class Assign2Skeleton {
 		//To Do: 
 		// Apply Steps 2.6 to 2.10 explained in the assignment description 
 		// data (which is a Deque) has all the information (after the split adjustment) you need to apply these steps
+		System.out.println(data.getFirst().toString());
+		Deque<Double> movingAverage = new ArrayDeque<>();
+		if (data.size() < 50) {
+			System.out.println("not enough days");
+			return;
+		}
+
+		int count = 0;
+		double avg = 0;
+		double cash = 0;
+		int shares = 0;
+		while (data.size() > 1) { //go to second to last trading day
+			StockData pulled = data.poll();
+
+			if (count < 50) {
+				movingAverage.addFirst(pulled.closePrice);
+			} else {
+				avg = findFiftyDayAverage(movingAverage);
+				movingAverage.addFirst(pulled.closePrice);
+				movingAverage.removeLast();
+				//System.out.printf("%s open: %f close: %f avg: %f%n", pulled.transDate, pulled.openPrice, pulled.closePrice, avg);
+				
+			}
+			count++;
+		}
+
+
+	}
+
+	public static double findFiftyDayAverage(Deque<Double> movingAverage) {
+		double average = 0;
+		for (Double value : movingAverage) {
+            average += value;
+        }
+		return average / 50;
 	}
 }
 
