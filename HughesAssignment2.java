@@ -1,13 +1,8 @@
-/* 
-This is a Java skeleton code to help you out with how to start this assignment.
-Please remember that this is NOT a compilable/runnable java file.
-Please feel free to use this skeleton code.
-Please look closely at the "To Do" parts of this file. You may get an idea of how to finish this assignment. 
-*/
-
 //ssh -N -p922 -L4321:mysql.cs.wwu.edu:3306 hughesw@proxy.cs.wwu.edu
-
+import java.io.BufferedWriter;
 import java.io.FileInputStream;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -15,11 +10,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 
-class Assign2Skeleton {
+class HughesAssignment2 {
+	static BufferedWriter writer;
 	
-	static class StockData {	   
-		// To Do: 
-		// Create this class which should contain the information  (date, open price, high price, low price, close price) for a particular ticker
+	static class StockData {
 		private String transDate;
 		private double openPrice, highPrice, lowPrice, closePrice, volume, adjustedClose;
 
@@ -74,11 +68,11 @@ class Assign2Skeleton {
 	public static void main(String[] args) throws Exception {
 		//String paramsFile = "ConnectionParameters_LabComputer.txt";
 		String paramsFile = "ConnectionParameters_RemoteComputer.txt";
+		String logFile = "logging_file.txt";
 
 		if (args.length >= 1) {
 			paramsFile = args[0];
 		}
-		
 		Properties connectprops = new Properties();
 		connectprops.load(new FileInputStream(paramsFile));
 		try {
@@ -88,6 +82,7 @@ class Assign2Skeleton {
 			conn = DriverManager.getConnection(dburl, connectprops);
 			System.out.println("Database connection is established");
 			
+			writer = new BufferedWriter(new FileWriter(logFile));
 			Scanner in = new Scanner(System.in);
 			System.out.print(prompt);
 			String input = in.nextLine().trim();
@@ -101,10 +96,7 @@ class Assign2Skeleton {
 						startdate = params[1];
 						enddate = params[2];
 					}
-					Deque<StockData> data = getStockData(ticker, startdate, enddate);
-					//System.out.println(data.getFirst().toString());
-					//System.out.println(data.getLast().toString());
-					
+					Deque<StockData> data = getStockData(ticker, startdate, enddate);					
 					System.out.println("\nExecuting investment strategy");
 					doStrategy(ticker, data);
 				} 
@@ -113,8 +105,10 @@ class Assign2Skeleton {
 				System.out.print(prompt);
 				input = in.nextLine().trim();
 			}
-
+			writer.close();
+			in.close();
 			conn.close();
+			System.out.println("Database connection closed.");
 
 		} catch (SQLException ex) {
 			System.out.printf("SQLException: %s%nSQLState: %s%nVendorError: %s%n",
@@ -136,24 +130,14 @@ class Assign2Skeleton {
         if (rs.next()) {
             System.out.printf("%s%n", rs.getString(1).trim());
         } else {
-            System.out.printf("Stock ticker %s is not in the database.%n", ticker);
+            System.out.printf("%s not found in database.%n", ticker);
 			return false;
         }
         pstmt.close();
 		return true;
 	}
 
-	static Deque<StockData> getStockData(String ticker, String start, String end) throws SQLException{	  
-		// To Do: 
-		// Execute the second query, which will return stock information of the ticker (descending on the transaction date)
-		// Please don't forget to use a prepared statement	
-		// To Do: 
-		// Loop through all the dates of that company (descending order)
-		// Find a split if there is any (2:1, 3:1, 3:2) and adjust the split accordingly
-		// Include the adjusted data to the result (which is a Deque); You can use addFirst method for that purpose
-		
-		//INTC 1997.07.08 1997.07.17
-		//INTC 1980.01.01 1999.12.31
+	static Deque<StockData> getStockData(String ticker, String start, String end) throws SQLException{		
 		Deque<StockData> result = new ArrayDeque<>();
 		StockData nextDay = null;
 		StockData currDay = null;
@@ -188,7 +172,8 @@ class Assign2Skeleton {
 			rs = pstmt.executeQuery();
 		}
 
-		if (rs.next()) {
+		if (rs.next()) { // initialize first day for keeping track of 2 stock days at once
+			// useful for debugging return of sql queries
 			// System.out.println("D: " + rs.getString(1).trim() +
 			// 		", O: " + Double.parseDouble(rs.getString(2).trim()) +
 			// 		", H: " + Double.parseDouble(rs.getString(3).trim()) +
@@ -226,36 +211,39 @@ class Assign2Skeleton {
 					Double.parseDouble(rs.getString(6).trim()),
 					Double.parseDouble(rs.getString(7).trim())
 			);
+			//adjust stock data based on previous splits
+			StockData temp = new StockData(
+					currDay.transDate,
+					(currDay.getOpenPrice() / divisor), 
+					(currDay.getHighPrice() / divisor), 
+					(currDay.getLowPrice() / divisor), 
+					(currDay.getClosePrice() / divisor), 
+					currDay.volume, 
+					currDay.adjustedClose);
 
 			double split = checkLinesForSplit(currDay, nextDay);
 			divisor = divisor * split;
 			if (split != 1) { // stock split occured
 				numOfSplits++;
-				splitToday = true;
-			}
-			
-			if (!splitToday) {
-				currDay.setOpenPrice(currDay.getOpenPrice() / divisor);
-				currDay.setClosePrice(currDay.getClosePrice() / divisor);
-				currDay.setHighPrice(currDay.getHighPrice() / divisor);
-				currDay.setLowPrice(currDay.getLowPrice() / divisor);
+				splitToday = true; // flag buy for next day
 			}
 
-			result.addFirst(currDay);
-			//System.out.println(result.getFirst() + "\n");
+			result.addFirst(temp);
 			currDay = nextDay; // 
 			splitToday = false;
 			numOfDays++;
 		}
 
 		// add last remaining stock day
-		if (!splitToday) {
-			currDay.setOpenPrice(currDay.getOpenPrice() / divisor);
-			currDay.setClosePrice(currDay.getClosePrice() / divisor);
-			currDay.setHighPrice(currDay.getHighPrice() / divisor);
-			currDay.setLowPrice(currDay.getLowPrice() / divisor);
-		}
-		result.addFirst(currDay);
+		StockData temp = new StockData(
+					currDay.transDate,
+					(currDay.getOpenPrice() / divisor), 
+					(currDay.getHighPrice() / divisor), 
+					(currDay.getLowPrice() / divisor), 
+					(currDay.getClosePrice() / divisor), 
+					currDay.volume, 
+					currDay.adjustedClose);
+		result.addFirst(temp);
 
 		System.out.println(numOfSplits + " splits in " + numOfDays + " trading days");
 		pstmt.close();		
@@ -286,10 +274,9 @@ class Assign2Skeleton {
 		//To Do: 
 		// Apply Steps 2.6 to 2.10 explained in the assignment description 
 		// data (which is a Deque) has all the information (after the split adjustment) you need to apply these steps
-		System.out.println(data.getFirst().toString());
 		Deque<Double> movingAverage = new ArrayDeque<>();
-		if (data.size() < 50) {
-			System.out.println("not enough days");
+		if (data.size() < 51) {
+			System.out.println("not enough trading days to execute strategy\nNet cash = 0");
 			return;
 		}
 
@@ -297,22 +284,55 @@ class Assign2Skeleton {
 		double avg = 0;
 		double cash = 0;
 		int shares = 0;
+		boolean buyFlag = false;
+		double yesterdayClose = 0;
+		StockData today = null;
+		int transCount = 0;
 		while (data.size() > 1) { //go to second to last trading day
-			StockData pulled = data.poll();
+			today = data.poll();
 
-			if (count < 50) {
-				movingAverage.addFirst(pulled.closePrice);
+			if (count < 50) { //populate 50 day moving average
+				movingAverage.addFirst(today.closePrice);
+				logMessage(String.format("%s open: %f high: %f low: %f close: %f%n", 
+						today.transDate, today.openPrice, today.highPrice, today.lowPrice, today.closePrice));
 			} else {
 				avg = findFiftyDayAverage(movingAverage);
-				movingAverage.addFirst(pulled.closePrice);
+				movingAverage.addFirst(today.closePrice);
 				movingAverage.removeLast();
-				//System.out.printf("%s open: %f close: %f avg: %f%n", pulled.transDate, pulled.openPrice, pulled.closePrice, avg);
-				
+				logMessage(String.format("%s open: %f high: %f low: %f close: %f (average %f)%n", 
+						today.transDate, today.openPrice, today.highPrice, today.lowPrice, today.closePrice, avg));
+				if (buyFlag) {
+					shares = shares + 100;
+					cash = cash - (today.openPrice * 100) - 8;
+					transCount++;
+					logMessage(String.format("Buy: %s 100 shares @ %f, total shares = %d, cash = %f%n", 
+											today.transDate, today.openPrice, shares, cash));
+				}
+				buyFlag = false;
+				if (today.closePrice < avg && (today.closePrice / today.openPrice < 0.97000001)) { // buy criterion
+					buyFlag = true;
+				} else if (shares >= 100 && today.openPrice > avg && (today.openPrice / yesterdayClose > 1.00999999)) { // sell criterion
+					shares = shares - 100;
+					cash = cash + (100 * ((today.openPrice + today.closePrice)/2)) - 8;
+					transCount++;
+					logMessage(String.format("Sell: %s 100 shares @ %f, total shares = %d, cash = %f%n", 
+											today.transDate, ((today.openPrice + today.closePrice)/2), shares, cash));
+				}
 			}
+			yesterdayClose = today.closePrice;
 			count++;
 		}
 
-
+		avg = findFiftyDayAverage(movingAverage);
+		today = data.poll();
+		if (shares > 0) {
+			cash = cash + (shares * today.openPrice);
+			shares = 0;
+			transCount++;
+		}
+		logMessage(String.format("Final sale: %s %d shares @ %f, cash = %f (average = %f)%n", 
+								today.transDate, shares, today.openPrice, cash, avg));
+		System.out.printf("Transactions executed: %d%nNet cash: %.2f%n", transCount, cash);
 	}
 
 	public static double findFiftyDayAverage(Deque<Double> movingAverage) {
@@ -322,20 +342,13 @@ class Assign2Skeleton {
         }
 		return average / 50;
 	}
+
+	public static void logMessage(String message) {
+		try {
+			writer.write(message);
+			writer.flush();
+		} catch (IOException e) {
+			System.err.println("Logging failed: " + e.getMessage());
+		}
+	}
 }
-
-
-
-/*
-Enter ticker symbol [start/end dates]: INTC 1997.07.05 1997.07.17
-Intel Corp.
-D: 1997.07.17, O: 88.25, H: 89.69, L: 86.12, C: 87.81, V: 1.029464E8, AC: 16.3
-D: 1997.07.16, O: 86.38, H: 88.88, L: 84.75, C: 88.38, V: 1.888276E8, AC: 16.4        
-D: 1997.07.15, O: 80.75, H: 81.94, L: 79.69, C: 80.91, V: 1.376504E8, AC: 15.01       
-D: 1997.07.14, O: 77.25, H: 78.98, L: 76.75, C: 78.75, V: 9.10148E7, AC: 14.61        
-D: 1997.07.11, O: 150.5, H: 154.0, L: 149.88, C: 153.81, V: 8.86416E7, AC: 14.27      
-D: 1997.07.10, O: 152.5, H: 153.5, L: 149.75, C: 150.12, V: 1.046712E8, AC: 13.93     
-D: 1997.07.09, O: 151.0, H: 154.56, L: 151.0, C: 152.62, V: 1.344272E8, AC: 14.16     
-D: 1997.07.08, O: 147.81, H: 150.38, L: 146.25, C: 149.62, V: 8.86408E7, AC: 13.88    
-D: 1997.07.07, O: 145.69, H: 149.0, L: 145.38, C: 147.38, V: 8.10528E7, AC: 13.67 
-*/
